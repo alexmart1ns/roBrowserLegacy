@@ -158,13 +158,8 @@ function apply() {
 		if (!isFullScreen) Context.requestFullScreen();
 	} else {
 		if (isFullScreen) Context.cancelFullScreen();
-		if (Context.Is.POPUP) {
-			const size = Graphics.screensize.split('x');
-			if (size[0] != window.innerWidth && size[1] != window.innerHeight) {
-				window.resizeTo(size[0], size[1]);
-				window.moveTo((screen.availWidth - size[0]) / 2, (screen.availHeight - size[1]) / 2);
-			}
-		}
+		const size = Graphics.screensize.split('x');
+		Context.resizeWindow(size[0], size[1]);
 	}
 
 	if (Configs.get('_serverEditMode')) {

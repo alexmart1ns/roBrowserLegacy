@@ -115,6 +115,87 @@ function loadFiles(callback) {
 	q.run();
 }
 
+function showSupportError(rawError) {
+	roInitSpinner.remove();
+	const rawText = typeof rawError === 'string' ? rawError : rawError?.message || 'Graphics/Browser check failed.';
+	const cleanText = rawText
+		.replace(/<[^>]+>/g, '')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>');
+
+	if (window.electronAPI?.diagnostics?.log) {
+		window.electronAPI.diagnostics
+			.log({
+				level: 'error',
+				category: 'startup',
+				message: 'Context.checkSupport failed',
+				meta: { reason: cleanText }
+			})
+			.catch(() => {});
+	}
+
+	let overlay = document.getElementById('ro-support-error');
+	if (!overlay) {
+		overlay = document.createElement('div');
+		overlay.id = 'ro-support-error';
+		Object.assign(overlay.style, {
+			position: 'fixed',
+			inset: '0',
+			zIndex: '200000',
+			display: 'flex',
+			alignItems: 'center',
+			justifyContent: 'center',
+			background: 'rgba(11, 16, 26, 0.94)',
+			color: '#f1f5f9',
+			fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
+			padding: '24px'
+		});
+
+		const card = document.createElement('div');
+		Object.assign(card.style, {
+			maxWidth: '520px',
+			width: '100%',
+			background: '#172033',
+			border: '1px solid rgba(248, 113, 113, 0.45)',
+			borderRadius: '10px',
+			padding: '24px',
+			boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)'
+		});
+
+		const title = document.createElement('h2');
+		title.textContent = 'WebGL2 / Graphics Initialization Failed';
+		Object.assign(title.style, {
+			margin: '0 0 12px 0',
+			fontSize: '18px',
+			color: '#fca5a5'
+		});
+
+		const msg = document.createElement('p');
+		msg.textContent = cleanText;
+		Object.assign(msg.style, {
+			margin: '0 0 12px 0',
+			lineHeight: '1.5',
+			fontSize: '14px'
+		});
+
+		const hint = document.createElement('p');
+		hint.textContent =
+			'Verify that GPU hardware acceleration and up-to-date OpenGL / ANGLE / WebGL2 drivers are enabled on this system.';
+		Object.assign(hint.style, {
+			margin: '0',
+			lineHeight: '1.4',
+			fontSize: '13px',
+			color: '#94a3b8'
+		});
+
+		card.appendChild(title);
+		card.appendChild(msg);
+		card.appendChild(hint);
+		overlay.appendChild(card);
+		document.body.appendChild(overlay);
+	}
+}
+
 class GameEngine {
 	/**
 	 * Initialize Game
@@ -153,7 +234,12 @@ class GameEngine {
 			loadFiles(GameEngine.reload);
 		});
 
-		Context.checkSupport();
+		try {
+			Context.checkSupport();
+		} catch (err) {
+			showSupportError(err);
+			return;
+		}
 
 		// Execute
 		q.run();

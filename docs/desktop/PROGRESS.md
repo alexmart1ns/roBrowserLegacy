@@ -2,12 +2,28 @@
 
 ## Current Status
 
-- **Current Phase / Gate:** `G4` completed -> Moving to `G5` (Configuration, User Data & First-Use UX)
+- **Current Phase / Gate:** `G5` & `G6` completed -> Moving to `G7` (Launcher Asset Patcher & Safe Updater)
 - **Branch:** `feat/electron-desktop-port`
 - **Base Commit:** `337870b6eea50ec0f528f02116c36082f608967a`
 - **Environment:** Windows 11 x64 (`10.0.26300.0`), Node `v24.15.0`, npm `11.12.1`, Electron `41.10.7`, Vite `8.3.7`, Vitest `4.1.12`, electron-builder `26.18.0`
 
 ## Completed Gates
+
+### `G5` & `G6` — Configuration, First-Use Launcher UX, OS Integration & Stability (`PASS`)
+- **Completed:**
+  - Implemented versioned atomic `SettingsStore` (`applications/electron/services/settings-store.js`) in `userData/desktop-settings.json` managing assets folder, server CRUD entries (validated host/port/URL/packetver), preferences, window bounds, updates config, and debug flags without storing plaintext passwords.
+  - Implemented structured `DesktopLogger` (`applications/electron/services/logger.js`) with recursive secret/password/token/auth/cookie redaction (`[REDACTED]`), bounded 500-entry ring buffer, opt-in debug file rotation (`2 MiB`), and sanitized `buildDiagnosticsSnapshot` / JSON export.
+  - Built CSP-clean Desktop Launcher UI (`applications/electron/renderer/launcher.{js,css}`, `config.js`, `entry.js`, `index.html`): displays asset readiness, `DATA.INI` GRF priority, `PACKETVER`, live indexing progress (`assets.onProgress`), reindex/cache reset, server CRUD, Graphics/Audio preference sync into `localStorage` (`Audio` v1.0, `Graphics` v1.1 preserving existing post-processing keys), dynamic CSP origin reload when HTTP endpoints change, diagnostics preview/export, reset confirmation, and game launch trigger.
+  - Implemented single-instance lock (`app.requestSingleInstanceLock()` focusing existing window on `second-instance`), display-safe window bounds restoration/clamping (`applications/electron/main/window-state.js`), debounced bounds persistence, native menu bar suppression on Windows/Linux (preserving `Alt+*` game hotkeys), `will-prevent-unload` clean exit handling, and validated `ro:window:*` / `ro:platform:saveScreenshot` IPC.
+  - Updated shared renderer guards safely for both platforms: `Context.js` (`requestFullScreen`, `cancelFullScreen`, `resizeWindow`), `GraphicsOption.js`, `Intro/Preferences.js`, `KeyEventHandler.js` (`focus blur` modifier reset), `ScreenShot.js` (native PNG save to `Pictures/roBrowserLegacy/`), and `GameEngine.js` (friendly WebGL2 support error UI).
+  - Verified with `tests/desktop/settings-logger-window.test.js` (13 tests), full `npm test` (41 files / 238 tests PASS), ESLint (0 errors on Electron/touched files), `npm run format:check` (PASS), `npm run build:all` (Web regression PASS), and two-session live packaged Electron CDP probe (`SESSION_1` Launcher -> Server add -> `1120x700` resize -> PNG screenshot validation -> engine boot `roReady: true`; `SESSION_2` cold restart verifying persisted server + `1120x700` window bounds, 0 console errors).
+- **Files Added/Modified:**
+  - `applications/electron/services/logger.js`, `settings-store.js`
+  - `applications/electron/main/window-state.js`, `ipc-security.js`, `ipc-handlers.js`, `window-security.js`, `bootstrap.js`
+  - `applications/electron/preload/preload.cjs`
+  - `applications/electron/renderer/config.js`, `entry.js`, `index.html`, `launcher.js`, `launcher.css`
+  - `src/Core/Context.js`, `src/Controls/KeyEventHandler.js`, `src/Controls/ScreenShot.js`, `src/Engine/GameEngine.js`, `src/UI/Components/GraphicsOption/GraphicsOption.js`, `src/UI/Components/Intro/Preferences.js`
+  - `tests/desktop/settings-logger-window.test.js`
 
 ### `G4` — Local Assets, GRF, VFS & Workers (`PASS`)
 - **Completed:**

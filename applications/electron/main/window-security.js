@@ -54,6 +54,10 @@ export function applyWindowSecurity(
 		}
 	});
 
+	contents.on('will-prevent-unload', event => {
+		event.preventDefault();
+	});
+
 	contents.on('destroyed', () => {
 		if (onCleanup) {
 			onCleanup(webContentsId, 'destroyed');

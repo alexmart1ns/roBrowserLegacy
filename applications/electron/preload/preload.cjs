@@ -12,6 +12,45 @@ contextBridge.exposeInMainWorld('electronAPI', {
 		},
 		openExternal(url) {
 			return ipcRenderer.invoke('ro:platform:openExternal', url);
+		},
+		saveScreenshot(bytes) {
+			return ipcRenderer.invoke('ro:platform:saveScreenshot', bytes);
+		}
+	},
+
+	settings: {
+		load() {
+			return ipcRenderer.invoke('ro:settings:load');
+		},
+		save(partial) {
+			return ipcRenderer.invoke('ro:settings:save', partial);
+		},
+		reset() {
+			return ipcRenderer.invoke('ro:settings:reset');
+		}
+	},
+
+	diagnostics: {
+		log(entry) {
+			return ipcRenderer.invoke('ro:diagnostics:log', entry);
+		},
+		getSnapshot() {
+			return ipcRenderer.invoke('ro:diagnostics:getSnapshot');
+		},
+		exportReport() {
+			return ipcRenderer.invoke('ro:diagnostics:export');
+		}
+	},
+
+	windowControls: {
+		setFullscreen(fullscreen) {
+			return ipcRenderer.invoke('ro:window:setFullscreen', Boolean(fullscreen));
+		},
+		setSize(width, height) {
+			return ipcRenderer.invoke('ro:window:setSize', { width, height });
+		},
+		getState() {
+			return ipcRenderer.invoke('ro:window:getState');
 		}
 	},
 

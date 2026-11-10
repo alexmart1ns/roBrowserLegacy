@@ -98,6 +98,40 @@ class ScreenShot {
 			data[i] = binary.charCodeAt(i);
 		}
 
+		if (window.electronAPI?.platform?.saveScreenshot) {
+			window.electronAPI.platform
+				.saveScreenshot(data)
+				.then(res => {
+					if (res?.ok && res.filePath) {
+						ChatBox.addText(
+							`Screenshot ${date} saved to: ${res.filePath}`,
+							ChatBox.TYPE.PUBLIC,
+							ChatBox.FILTER.PUBLIC_LOG,
+							null,
+							false
+						);
+					} else {
+						ChatBox.addText(
+							`Screenshot ${date} could not be saved (${res?.code || 'unknown error'}).`,
+							ChatBox.TYPE.ERROR,
+							ChatBox.FILTER.PUBLIC_LOG,
+							null,
+							false
+						);
+					}
+				})
+				.catch(() => {
+					ChatBox.addText(
+						`Screenshot ${date} could not be saved.`,
+						ChatBox.TYPE.ERROR,
+						ChatBox.FILTER.PUBLIC_LOG,
+						null,
+						false
+					);
+				});
+			return;
+		}
+
 		// We create a local image with the buffer
 		const url = window.URL.createObjectURL(new Blob([data], { type: 'image/png' }));
 

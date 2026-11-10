@@ -1,6 +1,7 @@
 import { APP_HOST, APP_SCHEME } from './protocol-security.js';
 
 export const MAX_IPC_PACKET_BYTES = 1024 * 1024; // 1 MiB per send
+export const MAX_SCREENSHOT_BYTES = 16 * 1024 * 1024; // 16 MiB max PNG screenshot
 export const MAX_HOST_LENGTH = 255;
 export const MAX_EXTERNAL_URL_LENGTH = 2048;
 
@@ -97,7 +98,7 @@ export function validateOpenSocketPayload(payload) {
 	};
 }
 
-export function toTightUint8Array(data) {
+export function toTightUint8Array(data, maxBytes = MAX_IPC_PACKET_BYTES) {
 	let view;
 	if (data instanceof Uint8Array) {
 		view = data;
@@ -113,11 +114,41 @@ export function toTightUint8Array(data) {
 		return { ok: false, reason: 'EMPTY_PAYLOAD' };
 	}
 
-	if (view.byteLength > MAX_IPC_PACKET_BYTES) {
+	if (view.byteLength > maxBytes) {
 		return { ok: false, reason: 'PAYLOAD_TOO_LARGE' };
 	}
 
 	const copy = new Uint8Array(view.byteLength);
 	copy.set(view);
 	return { ok: true, bytes: copy };
+}
+
+export function validateWindowSizePayload(payload) {
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		return { ok: false, reason: 'INVALID_PAYLOAD' };
+	}
+	const width = Number(payload.width);
+	const height = Number(payload.height);
+	if (!Number.isInteger(width) || width < 800 || width > 7680) {
+		return { ok: false, reason: 'INVALID_WIDTH' };
+	}
+	if (!Number.isInteger(height) || height < 600 || height > 4320) {
+		return { ok: false, reason: 'INVALID_HEIGHT' };
+	}
+	return { ok: true, width, height };
+}
+
+export function validateLogPayload(payload) {
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		return { ok: false, reason: 'INVALID_PAYLOAD' };
+	}
+	const validLevels = new Set(['info', 'warn', 'error', 'debug']);
+	const level = validLevels.has(payload.level) ? payload.level : 'info';
+	const category =
+		typeof payload.category === 'string' && payload.category.trim()
+			? payload.category.trim().slice(0, 64)
+			: 'renderer';
+	const message = typeof payload.message === 'string' ? payload.message.slice(0, 2000) : '';
+	const meta = payload.meta && typeof payload.meta === 'object' ? payload.meta : null;
+	return { ok: true, level, category, message, meta };
 }

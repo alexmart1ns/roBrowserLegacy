@@ -219,9 +219,9 @@ jQuery(window).bind('keydown keyup', function (event) {
 });
 
 /**
- * Reset keys state when window got focused
+ * Reset keys state when window loses or regains focus
  */
-jQuery(window).on('focus', function (event) {
+jQuery(window).on('focus blur', function () {
 	KEYS.SHIFT = false;
 	KEYS.CTRL = false;
 	KEYS.ALT = false;

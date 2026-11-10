@@ -348,14 +348,8 @@ function onUpdateScreenSize() {
 		Context.cancelFullScreen();
 	}
 
-	if (Context.Is.POPUP) {
-		const size = GraphicsSettings.screensize.split('x');
-
-		if (size[0] != window.innerWidth && size[1] != window.innerHeight) {
-			window.resizeTo(size[0], size[1]);
-			window.moveTo((screen.availWidth - size[0]) / 2, (screen.availHeight - size[1]) / 2);
-		}
-	}
+	const size = GraphicsSettings.screensize.split('x');
+	Context.resizeWindow(size[0], size[1]);
 }
 
 function onTabSwitch(event) {

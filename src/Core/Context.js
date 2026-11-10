@@ -8,6 +8,8 @@
  * @author Vincent Thibault
  */
 
+let _electronFullscreen = false;
+
 class Context {
 	/**
 	 * Get Informations about current Context
@@ -22,13 +24,23 @@ class Context {
 	 * @returns {boolean} is in fullscreen
 	 */
 	static isFullScreen() {
-		return !!(document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement);
+		return !!(
+			document.fullscreenElement ||
+			document.mozFullScreenElement ||
+			document.webkitFullscreenElement ||
+			_electronFullscreen
+		);
 	}
 
 	/**
 	 * Try to launch roBrowser in Full Screen
 	 */
 	static requestFullScreen() {
+		if (window.electronAPI?.windowControls?.setFullscreen) {
+			_electronFullscreen = true;
+			window.electronAPI.windowControls.setFullscreen(true).catch(() => {});
+			return;
+		}
 		if (!Context.isFullScreen()) {
 			const element = document.documentElement;
 
@@ -46,12 +58,43 @@ class Context {
 	 * Try to cancel roBrowser full screen
 	 */
 	static cancelFullScreen() {
+		if (window.electronAPI?.windowControls?.setFullscreen) {
+			_electronFullscreen = false;
+			window.electronAPI.windowControls.setFullscreen(false).catch(() => {});
+			return;
+		}
 		if (document.cancelFullScreen) {
 			document.cancelFullScreen();
 		} else if (document.mozCancelFullScreen) {
 			document.mozCancelFullScreen();
 		} else if (document.webkitCancelFullScreen) {
 			document.webkitCancelFullScreen();
+		}
+	}
+
+	/**
+	 * Resize desktop or popup window safely
+	 * @param {number|string} width
+	 * @param {number|string} height
+	 */
+	static resizeWindow(width, height) {
+		const w = Number.parseInt(String(width), 10);
+		const h = Number.parseInt(String(height), 10);
+		if (!Number.isInteger(w) || !Number.isInteger(h) || w <= 0 || h <= 0) {
+			return;
+		}
+
+		if (window.electronAPI?.windowControls?.setSize) {
+			_electronFullscreen = false;
+			window.electronAPI.windowControls.setSize(w, h).catch(() => {});
+			return;
+		}
+
+		if (Context.Is.POPUP) {
+			if (w != window.innerWidth && h != window.innerHeight) {
+				window.resizeTo(w, h);
+				window.moveTo((screen.availWidth - w) / 2, (screen.availHeight - h) / 2);
+			}
 		}
 	}
 
