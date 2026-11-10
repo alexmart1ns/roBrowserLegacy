@@ -108,12 +108,26 @@ export default [
   },
   
   {
-    files: ['applications/electron/*.js'],
+    files: ['applications/electron/**/*.js', 'applications/electron/**/*.mjs'],
+    ignores: ['applications/electron/renderer/**'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
         ...globals.node,
+        ...globals.es2025
+      }
+    },
+    rules: sharedRules
+  },
+
+  {
+    files: ['applications/electron/renderer/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
         ...globals.es2025
       }
     },

@@ -2,12 +2,29 @@
 
 ## Current Status
 
-- **Current Phase / Gate:** `G0` completed -> Moving to `G1` (Desktop Renderer Bundle & Safe `app://` Protocol)
+- **Current Phase / Gate:** `G1` completed -> Moving to `G2` (Electron Bridge & Security)
 - **Branch:** `feat/electron-desktop-port`
 - **Base Commit:** `337870b6eea50ec0f528f02116c36082f608967a`
 - **Environment:** Windows 11 x64 (`10.0.26300.0`), Node `v24.15.0`, npm `11.12.1`, Electron `41.10.7`, Vite `8.3.7`, Vitest `4.1.12`, electron-builder `26.18.0`
 
 ## Completed Gates
+
+### `G1` — Build & Renderer of Electron (`PASS`)
+- **Completed:**
+  - Created Vite desktop renderer build pipeline (`applications/electron/vite.desktop.config.mjs`) producing deterministic bundles in `dist/DesktopRenderer/` (including Web Workers `ThreadEventHandler`, `PathFindingWorker`, `liblua5.1.wasm` asset, `?raw` templates/shaders, dynamic app chunks, icons, and `rijndael-js`/`bson`/`lodash-es`/`jquery`).
+  - Migrated desktop HTML entry (`applications/electron/renderer/index.html`, `preloader.css`, `config.js`, `entry.js`) removing inline scripts, removing hardcoded public servers/`remoteClient`/`socketProxy`/`webserverAddress`, and omitting `applications/electron/index.html`.
+  - Implemented strict `app://robrowser/` protocol handler (`applications/electron/main/protocol.js`, `protocol-security.js`, `csp.js`) with privileged scheme registration before `app.ready`, streaming `fs.createReadStream` + HTTP Range support, symlink `realpath` containment, traversal/UNC/backslash/drive-letter/null-byte blocking, GET/HEAD-only enforcement, and CSP without `'unsafe-eval'` (`'wasm-unsafe-eval'` enabled).
+  - Updated `src/UI/Components/Intro/Intro.js` to skip external Google Fonts injection in Electron so desktop boots cleanly offline under CSP.
+  - Updated `applications/electron/electron-builder.yml` to package compiled `renderer/` without raw `src/` or unused `node_modules/`.
+  - Added npm scripts (`build:desktop:renderer`, `desktop:dev`, `desktop:pack`, `desktop:dist:win`, `desktop:dist:linux`, `desktop:dist:mac`) and chained `build:desktop:renderer` before `electron:build*`.
+  - Verified with unit tests (`tests/desktop/protocol-security.test.js`, 9/9 PASS), ESLint (0 errors on touched/Electron files), Prettier (`format:check` PASS), Web build regression (`npm run build:all` PASS), and real CDP smoke launch from an isolated directory with spaces and Unicode (`roBrowser G1 测试\roBrowserLegacy.exe`) showing Intro UI + WebGL2 + Web Worker + blocked inline script CSP + zero console errors/exceptions.
+- **Files Added/Modified:**
+  - `applications/electron/main.js`, `applications/electron/main/bootstrap.js`, `applications/electron/main/protocol.js`, `applications/electron/main/protocol-security.js`, `applications/electron/main/csp.js`
+  - `applications/electron/renderer/index.html`, `applications/electron/renderer/preloader.css`, `applications/electron/renderer/config.js`, `applications/electron/renderer/entry.js`
+  - `applications/electron/vite.desktop.config.mjs`, `applications/electron/electron-builder.yml`
+  - `applications/electron/index.html` (removed)
+  - `src/UI/Components/Intro/Intro.js`, `package.json`, `eslint.config.js`
+  - `tests/desktop/protocol-security.test.js`
 
 ### `G0` — Audit & Executable Baseline (`PASS`)
 - **Completed:**

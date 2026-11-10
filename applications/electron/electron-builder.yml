@@ -7,12 +7,14 @@ directories:
     buildResources: applications/electron
 
 files:
-    - applications/electron/**/*
-    - applications/shared/**/*
-    - src/**/*
-    - node_modules/lodash-es/**/*
-    - node_modules/bson/**/*
+    - applications/electron/main.js
+    - applications/electron/main/**/*
+    - applications/electron/preload.mjs
+    - applications/electron/icon.png
+    - from: dist/DesktopRenderer
+      to: renderer
     - package.json
+    - '!node_modules/**/*'
 
 extraMetadata:
     main: applications/electron/main.js

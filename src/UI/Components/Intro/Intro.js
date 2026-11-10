@@ -99,8 +99,8 @@ Intro.init = function init() {
 		Configs.set('_serverEditMode', true);
 	}
 
-	// Inject Google Fonts if not already present
-	if (!document.querySelector('link[href*="Cinzel"]')) {
+	// Inject Google Fonts if not already present (Web only — desktop uses local/system fonts cleanly offline)
+	if (!window.electronAPI?.isElectron && !document.querySelector('link[href*="Cinzel"]')) {
 		const link = document.createElement('link');
 		link.rel = 'stylesheet';
 		link.href =
