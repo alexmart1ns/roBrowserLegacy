@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { getAppEntryUrl, registerAppProtocol, registerPrivilegedSchemes, resolveRendererRoot } from './protocol.js';
+import { registerAssetProtocol, registerAssetScheme } from './asset-protocol.js';
 import { applySessionSecurity, applyWindowSecurity } from './window-security.js';
 import { createDesktopServices } from './ipc-handlers.js';
 
@@ -20,7 +21,13 @@ const devOrigin = (() => {
 	}
 })();
 
+function getCliFlagValue(prefix) {
+	const found = process.argv.find(arg => arg.startsWith(prefix));
+	return found ? found.slice(prefix.length) : null;
+}
+
 registerPrivilegedSchemes();
+registerAssetScheme();
 
 let mainWindow = null;
 let desktopServices = null;
@@ -75,6 +82,14 @@ export async function startApp() {
 
 	applySessionSecurity(session.defaultSession);
 	desktopServices = createDesktopServices({ isDev, devOrigin });
+	registerAssetProtocol({ assetService: desktopServices.assetService, isDev, devOrigin });
+
+	const initialAssetsDir = getCliFlagValue('--assets-dir=') || process.env.RO_ASSETS_DIR || null;
+	if (initialAssetsDir) {
+		await desktopServices.assetService.initializeDirectory(initialAssetsDir).catch(err => {
+			console.warn('[Assets] Failed to initialize initial assets directory:', err?.message || 'unknown');
+		});
+	}
 
 	if (!isDev) {
 		const rendererRoot = resolveRendererRoot(electronDir);
@@ -87,6 +102,19 @@ export async function startApp() {
 	}
 
 	createWindow();
+
+	let isQuitting = false;
+	app.on('before-quit', event => {
+		if (isQuitting || !desktopServices) {
+			return;
+		}
+		event.preventDefault();
+		isQuitting = true;
+		desktopServices
+			.shutdown()
+			.catch(() => {})
+			.finally(() => app.quit());
+	});
 
 	app.on('window-all-closed', () => {
 		if (process.platform !== 'darwin') {

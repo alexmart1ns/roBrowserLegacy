@@ -17,22 +17,7 @@ import Sprite from 'Loaders/Sprite.js';
 import Action from 'Loaders/Action.js';
 import Str from 'Loaders/Str.js';
 import FileSystem from 'Core/FileSystem.js';
-
-// Load dependencies
-/* global process */
-let fs = null;
-
-const isElectron = typeof process !== 'undefined' && process.versions?.electron;
-
-if (isElectron) {
-	try {
-		// eslint-disable-next-line
-		const req = Function('return require')();
-		fs = req('fs');
-	} catch {
-		//ignore error
-	}
-}
+import DesktopAssetProvider from 'Platform/desktop/DesktopAssetProvider.js';
 
 /**
  * Batch file loading - groups requests within a frame and sends them as one
@@ -64,6 +49,12 @@ class FileManager {
 	static filesAlias = {};
 
 	/**
+	 * Optional Desktop AssetProvider (ro-asset:// VFS)
+	 * @var {DesktopAssetProvider|null}
+	 */
+	static desktopProvider = DesktopAssetProvider.isAvailable() ? new DesktopAssetProvider() : null;
+
+	/**
 	 * Initialize file manager with a list of files
 	 *
 	 * @param {mixed} grf list
@@ -77,9 +68,7 @@ class FileManager {
 
 		// load GRFs from a file (DATA.INI)
 		if (typeof grfList === 'string') {
-			if (fs) {
-				content = fs.readFileSync(grfList);
-			} else if ((files = FileSystem.search(grfList)).length) {
+			if ((files = FileSystem.search(grfList)).length) {
 				content = new FileReaderSync().readAsText(files[0]);
 			} else {
 				grfList = /\.grf$/i;
@@ -112,14 +101,6 @@ class FileManager {
 		if (grfList instanceof Array) {
 			list = grfList;
 			for (i = 0, count = list.length; i < count; ++i) {
-				if (fs && fs.existsSync(list[i])) {
-					list[i] = {
-						name: list[i],
-						size: fs.statSync(list[i]).size,
-						fd: fs.openSync(list[i], 'r')
-					};
-					continue;
-				}
 				list[i] = FileSystem.getFileSync(list[i]);
 			}
 		}
@@ -139,6 +120,24 @@ class FileManager {
 		for (i = 0, count = list.length; i < count; ++i) {
 			FileManager.addGameFile(list[i]);
 		}
+	}
+
+	/**
+	 * Initialize FileManager including async Desktop VFS check when available
+	 *
+	 * @param {mixed} grfList
+	 * @return {Promise<number>} number of mounted archive/asset sources
+	 */
+	static async initAsync(grfList) {
+		FileManager.init(grfList);
+		let count = FileManager.gameFiles.length;
+		if (FileManager.desktopProvider) {
+			const res = await FileManager.desktopProvider.initialize();
+			if (res.ready) {
+				count += res.count;
+			}
+		}
+		return count;
 	}
 
 	/**
@@ -191,6 +190,31 @@ class FileManager {
 	}
 
 	/**
+	 * Search a file across local game files and Desktop VFS asynchronously
+	 *
+	 * @param {RegExp} regex
+	 * @return {Promise<Array>}
+	 */
+	static async searchAsync(regex) {
+		const localMatches = FileManager.gameFiles.length
+			? Array.from(new Set(FileManager.gameFiles.flatMap(file => file.table.data.match(regex) || [])))
+			: [];
+
+		if (FileManager.desktopProvider?.isReady()) {
+			const desktopMatches = await FileManager.desktopProvider.search(regex);
+			if (localMatches.length === 0) {
+				return desktopMatches;
+			}
+			return Array.from(new Set([...localMatches, ...desktopMatches]));
+		}
+
+		if (localMatches.length > 0) {
+			return localMatches;
+		}
+		return FileManager.search(regex);
+	}
+
+	/**
 	 * Get a file
 	 *
 	 * @param {string} filename
@@ -200,12 +224,7 @@ class FileManager {
 		// Trim the path
 		filename = filename.replace(/^\s+|\s+$/g, '');
 
-		if (fs && fs.existsSync(filename)) {
-			callback(fs.readFileSync(filename));
-			return;
-		}
-
-		// Search in filesystem
+		// Search in browser filesystem (supports drag-drop overrides)
 		FileSystem.getFile(
 			filename,
 
@@ -230,8 +249,38 @@ class FileManager {
 					}
 				}
 
-				// Not in GRFs ? Try to load it from
-				// remote client host
+				// Desktop local VFS (loose files + indexed GRFs via ro-asset://)
+				if (FileManager.desktopProvider?.isReady()) {
+					FileManager.desktopProvider
+						.getBytes(filename)
+						.then(res => {
+							if (res.found) {
+								callback(res.data);
+								return;
+							}
+							if (FileManager.remoteClient) {
+								FileManager.getHTTP(filename, callback);
+							} else {
+								callback(null, "Can't get file");
+							}
+						})
+						.catch(() => {
+							if (FileManager.remoteClient) {
+								FileManager.getHTTP(filename, callback);
+							} else {
+								callback(null, "Can't get file");
+							}
+						});
+					return;
+				}
+
+				// On Desktop without remoteClient, do not hit /client/ fallback
+				if (DesktopAssetProvider.isAvailable() && !FileManager.remoteClient) {
+					callback(null, "Can't get file");
+					return;
+				}
+
+				// Not in GRFs ? Try to load it from remote client host
 				FileManager.getHTTP(filename, callback);
 			}
 		);

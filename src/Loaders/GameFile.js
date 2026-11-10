@@ -14,21 +14,6 @@ import Struct from 'Utils/Struct.js';
 import Inflate from 'Utils/Inflate.js';
 import TextEncoding from 'Utils/CodepageManager.js';
 
-/* global process */
-let fs = null;
-
-const isElectron = typeof process !== 'undefined' && process.versions?.electron;
-
-if (isElectron) {
-	try {
-		// eslint-disable-next-line
-		const req = Function('return require')();
-		fs = req('fs');
-	} catch {
-		//ignore error
-	}
-}
-
 /**
  * Extensions that should skip full encryption (only header encryption)
  */
@@ -105,11 +90,6 @@ class GRF {
 		// Helper
 		file.slice = file.slice || file.webkitSlice || file.mozSlice;
 		reader.load = (start, len) => {
-			if (fs && file.fd) {
-				const buf = Buffer.alloc(len);
-				fs.readSync(file.fd, buf, 0, len, start);
-				return new Uint8Array(buf).buffer;
-			}
 			return reader.readAsArrayBuffer(file.slice(start, start + len));
 		};
 
@@ -278,13 +258,6 @@ class GRF {
 			// Directory ?
 			if (!(entry.type & GRF.FILELIST_TYPE_FILE)) {
 				return false;
-			}
-
-			if (fs && this.file.fd) {
-				const buffer = Buffer.alloc(entry.length_aligned);
-				fs.readSync(this.file.fd, buffer, 0, entry.length_aligned, entry.offset + GRF.struct_header.size);
-				this.decodeEntry(new Uint8Array(buffer).buffer, entry, callback);
-				return true;
 			}
 
 			blob = this.file.slice(

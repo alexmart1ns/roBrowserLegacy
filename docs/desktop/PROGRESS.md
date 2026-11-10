@@ -2,12 +2,29 @@
 
 ## Current Status
 
-- **Current Phase / Gate:** `G3` completed -> Moving to `G4` (Local Assets, GRF, VFS & Workers)
+- **Current Phase / Gate:** `G4` completed -> Moving to `G5` (Configuration, User Data & First-Use UX)
 - **Branch:** `feat/electron-desktop-port`
 - **Base Commit:** `337870b6eea50ec0f528f02116c36082f608967a`
 - **Environment:** Windows 11 x64 (`10.0.26300.0`), Node `v24.15.0`, npm `11.12.1`, Electron `41.10.7`, Vite `8.3.7`, Vitest `4.1.12`, electron-builder `26.18.0`
 
 ## Completed Gates
+
+### `G4` — Local Assets, GRF, VFS & Workers (`PASS`)
+- **Completed:**
+  - Benchmarked Option A (Node `worker_threads` slice reader + native `node:zlib` + persistent disk index) vs Option B (slice reads + JS `Inflate`) on a 2,500-entry synthetic GRF: Option A achieved 6.50ms cold index+save, 2.55ms warm index load, 25.46ms for 500 random extractions (vs 29.92ms Option B), with 100% byte-for-byte parity. Selected Option A.
+  - Defined `Platform` contract (`src/Platform/contracts/AssetProvider.js`) and `DesktopAssetProvider` (`src/Platform/desktop/DesktopAssetProvider.js`) using privileged `ro-asset://local/` streaming protocol so sandboxed Chromium Web Workers (`ThreadEventHandler`) never require Node integration.
+  - Synced `Platform` path alias across `vite.config.js`, `applications/tools/builder-web.mjs`, and `applications/electron/vite.desktop.config.mjs`.
+  - Implemented `grf-reader.js` (0x200/0x300 slice reader reusing `GameFileDecrypt.js`, bounds-checked against corrupt/truncated GRFs, Windows-1252/UTF-8 parity, `DATA.INI` numeric parser, PE timestamp `PACKETVER` detector), `asset-index-cache.js` (versioned SHA-256 disk cache in `userData`), `local-asset-vfs.js` (loose files `data/`, `BGM/`, `System/`, `AI/` > `DATA.INI` > size-sorted GRFs; symlink containment), `asset-worker.mjs`, `asset-service.js`, and `asset-protocol.js` (Range 206 streaming + search + status + traversal guard).
+  - Removed `Function('return require')()` completely from `src/Core/FileManager.js` and `src/Loaders/GameFile.js`; updated `ThreadEventHandler.js` (`initAsync`, `searchAsync`) and `Client.js` (`detectedPacketVer`); prevented `/client/` HTTP fallback on Desktop when `remoteClient` is empty.
+  - Added `assets.{selectDirectory,getStatus,reindex,clearCache,onProgress}` IPC and `--assets-dir` / `RO_ASSETS_DIR` bootstrap + clean handle close on `before-quit`.
+  - Verified with `tests/desktop/local-assets-vfs.test.js` (6 tests: `DATA.INI` precedence, loose overrides, 0x200/0x300 byte parity with browser `GameFile`, cache hit/invalidation, traversal/corrupt GRF resilience, worker `AssetService` + PE detection), `tests/desktop/desktop-asset-provider.test.js` (1 test), `npm test` (full suite), `npm run build:all` (Web regression PASS), and live packaged Electron CDP probe (`DATA.INI` precedence, 206 Range streaming, 20220406 PE detection, search, 403 traversal block).
+- **Files Added/Modified:**
+  - `src/Platform/contracts/AssetProvider.js`, `src/Platform/desktop/DesktopAssetProvider.js`
+  - `src/Core/FileManager.js`, `src/Core/Client.js`, `src/Core/ThreadEventHandler.js`, `src/Loaders/GameFile.js`
+  - `applications/electron/services/grf-reader.js`, `asset-index-cache.js`, `local-asset-vfs.js`, `asset-worker.mjs`, `asset-service.js`
+  - `applications/electron/main/asset-protocol.js`, `bootstrap.js`, `ipc-handlers.js`, `preload/preload.cjs`, `electron-builder.yml`
+  - `vite.config.js`, `applications/tools/builder-web.mjs`, `applications/electron/vite.desktop.config.mjs`
+  - `tests/helpers/synthetic-grf.js`, `tests/desktop/local-assets-vfs.test.js`, `tests/desktop/desktop-asset-provider.test.js`
 
 ### `G3` — Native TCP with Packet Parity (`PASS`)
 - **Completed:**

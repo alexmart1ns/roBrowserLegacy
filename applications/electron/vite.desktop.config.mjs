@@ -16,6 +16,7 @@ export const desktopAliases = {
 	Engine: path.resolve(projectRoot, 'src/Engine'),
 	Loaders: path.resolve(projectRoot, 'src/Loaders'),
 	Network: path.resolve(projectRoot, 'src/Network'),
+	Platform: path.resolve(projectRoot, 'src/Platform'),
 	Plugins: path.resolve(projectRoot, 'src/Plugins'),
 	Preferences: path.resolve(projectRoot, 'src/Preferences'),
 	Renderer: path.resolve(projectRoot, 'src/Renderer'),

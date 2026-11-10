@@ -55,6 +55,25 @@ class Client {
 			Thread.send('SET_HOST', remoteClient);
 		}
 
+		// Auto-detect PACKETVER from local Desktop RO executable when configured
+		if (
+			typeof window !== 'undefined' &&
+			window.electronAPI?.assets?.getStatus &&
+			(!packetver || String(packetver).match(/^executable$/i)) &&
+			!PACKETVER.value
+		) {
+			window.electronAPI.assets
+				.getStatus()
+				.then(status => {
+					if (status?.detectedPacketVer && status.detectedPacketVer > 20000000) {
+						PACKETVER.value = status.detectedPacketVer;
+					}
+					savingFiles(files);
+				})
+				.catch(() => savingFiles(files));
+			return;
+		}
+
 		// Save full client
 		savingFiles(files);
 	}

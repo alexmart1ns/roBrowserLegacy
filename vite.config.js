@@ -54,6 +54,7 @@ export default defineConfig({
 			Engine: path.resolve(__dirname, './src/Engine'),
 			Loaders: path.resolve(__dirname, './src/Loaders'),
 			Network: path.resolve(__dirname, './src/Network'),
+			Platform: path.resolve(__dirname, './src/Platform'),
 			Plugins: path.resolve(__dirname, './src/Plugins'),
 			Preferences: path.resolve(__dirname, './src/Preferences'),
 			Renderer: path.resolve(__dirname, './src/Renderer'),

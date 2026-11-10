@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const NETWORK_EVENT_CHANNEL = 'ro:net:event';
+const ASSET_PROGRESS_CHANNEL = 'ro:assets:progress';
 
 contextBridge.exposeInMainWorld('electronAPI', {
 	isElectron: true,
@@ -11,6 +12,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
 		},
 		openExternal(url) {
 			return ipcRenderer.invoke('ro:platform:openExternal', url);
+		}
+	},
+
+	assets: {
+		selectDirectory() {
+			return ipcRenderer.invoke('ro:assets:selectDirectory');
+		},
+		getStatus() {
+			return ipcRenderer.invoke('ro:assets:getStatus');
+		},
+		reindex() {
+			return ipcRenderer.invoke('ro:assets:reindex');
+		},
+		clearCache() {
+			return ipcRenderer.invoke('ro:assets:clearCache');
+		},
+		onProgress(callback) {
+			if (typeof callback !== 'function') {
+				throw new TypeError('assets.onProgress requires a function callback');
+			}
+			const handler = (_event, payload) => {
+				callback(payload);
+			};
+			ipcRenderer.on(ASSET_PROGRESS_CHANNEL, handler);
+			return () => {
+				ipcRenderer.removeListener(ASSET_PROGRESS_CHANNEL, handler);
+			};
 		}
 	},
 

@@ -12,6 +12,7 @@ files:
     - applications/electron/preload/**/*
     - applications/electron/services/**/*
     - applications/electron/icon.png
+    - src/Loaders/GameFileDecrypt.js
     - from: dist/DesktopRenderer
       to: renderer
     - package.json

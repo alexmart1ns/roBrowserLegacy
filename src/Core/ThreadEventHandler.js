@@ -68,13 +68,13 @@ onmessage = function receive(event) {
 			};
 
 			// Start loading GRFs files
-			FileSystem.bind('onready', function () {
+			FileSystem.bind('onready', async function () {
 				FileManager.clean();
-				FileManager.init(msg.data.grfList);
+				const count = await FileManager.initAsync(msg.data.grfList);
 
 				postMessage({
 					uid: msg.uid,
-					arguments: [FileManager.gameFiles.length, null, msg.data]
+					arguments: [count, null, msg.data]
 				});
 			});
 
@@ -126,9 +126,11 @@ onmessage = function receive(event) {
 		// Search a file in Client
 		case 'SEARCH_FILE':
 			if (msg.uid) {
-				postMessage({
-					uid: msg.uid,
-					arguments: [FileManager.search(msg.data), null, msg.data]
+				FileManager.searchAsync(msg.data).then(results => {
+					postMessage({
+						uid: msg.uid,
+						arguments: [results, null, msg.data]
+					});
 				});
 			}
 			break;
