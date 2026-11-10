@@ -57,7 +57,10 @@ export function resolveActiveServer(settings) {
 
 export function isAssetsReady(assetsStatus) {
 	return Boolean(
-		assetsStatus?.configured && ((assetsStatus.totalGrfEntries || 0) > 0 || (assetsStatus.looseCount || 0) > 0)
+		assetsStatus?.configured &&
+		((assetsStatus.totalGrfEntries || 0) > 0 ||
+			(assetsStatus.looseCount || 0) > 0 ||
+			(assetsStatus.managedCount || 0) > 0)
 	);
 }
 

@@ -17,6 +17,8 @@ import { TcpService } from '../services/tcp-service.js';
 import { AssetService } from '../services/asset-service.js';
 import { SettingsStore } from '../services/settings-store.js';
 import { DesktopLogger } from '../services/logger.js';
+import { ManifestPatcher } from '../services/manifest-patcher.js';
+import { AppUpdaterService } from '../services/app-updater.js';
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -93,6 +95,7 @@ export function createDesktopServices({
 	isDev = false,
 	devOrigin = 'http://localhost:3000',
 	cacheDir = null,
+	managedAssetsDir = null,
 	settingsStore = null,
 	logger = null
 } = {}) {
@@ -134,9 +137,25 @@ export function createDesktopServices({
 		emitEvent: emitNetworkEvent
 	});
 
+	const resolvedManagedDir = managedAssetsDir || path.join(app.getPath('userData'), 'managed-assets');
+
 	const assetService = new AssetService({
 		cacheDir: cacheDir || path.join(app.getPath('userData'), 'cache', 'grf-index'),
+		managedDir: resolvedManagedDir,
 		onProgress: progress => broadcastToWindows('ro:assets:progress', progress)
+	});
+
+	const manifestPatcher = new ManifestPatcher({
+		managedDir: resolvedManagedDir,
+		beforeApply: () => assetService.close(),
+		afterApply: () => assetService.reindex(),
+		onProgress: progress => broadcastToWindows('ro:updates:patchProgress', progress)
+	});
+
+	const appUpdater = new AppUpdaterService({
+		currentVersion: app.getVersion(),
+		updatesDir: path.join(app.getPath('userData'), 'pending-updates'),
+		onStatus: status => broadcastToWindows('ro:updates:appStatus', status)
 	});
 
 	const senderOpts = { isDev, devOrigin };
@@ -418,9 +437,84 @@ export function createDesktopServices({
 		return tcpService.close(ownerId, socketId);
 	});
 
+	ipcMain.handle('ro:updates:getStatus', event => {
+		assertValidIpcSender(event, senderOpts);
+		return {
+			app: appUpdater.getStatus(),
+			patch: manifestPatcher.readState(),
+			managedDir: manifestPatcher.getManagedDir()
+		};
+	});
+
+	ipcMain.handle('ro:updates:setGameplayActive', (event, active) => {
+		assertValidIpcSender(event, senderOpts);
+		appUpdater.setGameplayActive(Boolean(active));
+		return { ok: true, gameplayActive: appUpdater.isGameplayActive() };
+	});
+
+	ipcMain.handle('ro:updates:checkApp', async event => {
+		assertValidIpcSender(event, senderOpts);
+		const current = store.get();
+		return appUpdater.checkForUpdates({
+			feedUrl: current.updates?.appFeedUrl || '',
+			channel: current.updates?.channel || 'stable'
+		});
+	});
+
+	ipcMain.handle('ro:updates:downloadApp', async event => {
+		assertValidIpcSender(event, senderOpts);
+		return appUpdater.downloadAvailableUpdate();
+	});
+
+	ipcMain.handle('ro:updates:installApp', async event => {
+		assertValidIpcSender(event, senderOpts);
+		const prep = await appUpdater.prepareInstall();
+		if (!prep.ok) {
+			return prep;
+		}
+		const openErr = await shell.openPath(prep.installerPath);
+		if (openErr) {
+			return { ok: false, code: 'INSTALLER_LAUNCH_FAILED', error: openErr };
+		}
+		logService.info('updater', 'Launching verified application installer', { version: prep.version });
+		setImmediate(() => app.quit());
+		return { ok: true, version: prep.version };
+	});
+
+	ipcMain.handle('ro:updates:checkAssetPatch', async event => {
+		assertValidIpcSender(event, senderOpts);
+		const current = store.get();
+		const res = await manifestPatcher.fetchAndVerifyManifest(current.updates?.assetManifestUrl || '', {
+			channel: current.updates?.channel || 'stable'
+		});
+		if (res.ok) {
+			const { rawManifest: _omitted, ...summary } = res;
+			return summary;
+		}
+		return res;
+	});
+
+	ipcMain.handle('ro:updates:applyAssetPatch', async event => {
+		assertValidIpcSender(event, senderOpts);
+		const current = store.get();
+		const applied = await manifestPatcher.applyFromUrl(current.updates?.assetManifestUrl || '', {
+			channel: current.updates?.channel || 'stable'
+		});
+		const assetsStatus = await assetService.getStatus();
+		return { ...applied, assetsStatus };
+	});
+
+	ipcMain.handle('ro:updates:cancelAssetPatch', event => {
+		assertValidIpcSender(event, senderOpts);
+		manifestPatcher.cancelActive();
+		return { ok: true };
+	});
+
 	return {
 		settingsStore: store,
 		logger: logService,
+		manifestPatcher,
+		appUpdater,
 		networkPolicy,
 		tcpService,
 		assetService,
@@ -428,6 +522,7 @@ export function createDesktopServices({
 			tcpService.destroyOwnerSockets(ownerId);
 		},
 		async shutdown() {
+			manifestPatcher.cancelActive();
 			await assetService.close();
 		}
 	};

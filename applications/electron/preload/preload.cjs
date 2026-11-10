@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const NETWORK_EVENT_CHANNEL = 'ro:net:event';
 const ASSET_PROGRESS_CHANNEL = 'ro:assets:progress';
+const PATCH_PROGRESS_CHANNEL = 'ro:updates:patchProgress';
+const APP_UPDATE_STATUS_CHANNEL = 'ro:updates:appStatus';
 
 contextBridge.exposeInMainWorld('electronAPI', {
 	isElectron: true,
@@ -104,6 +106,57 @@ contextBridge.exposeInMainWorld('electronAPI', {
 			ipcRenderer.on(NETWORK_EVENT_CHANNEL, handler);
 			return () => {
 				ipcRenderer.removeListener(NETWORK_EVENT_CHANNEL, handler);
+			};
+		}
+	},
+
+	updates: {
+		getStatus() {
+			return ipcRenderer.invoke('ro:updates:getStatus');
+		},
+		setGameplayActive(active) {
+			return ipcRenderer.invoke('ro:updates:setGameplayActive', Boolean(active));
+		},
+		checkApp() {
+			return ipcRenderer.invoke('ro:updates:checkApp');
+		},
+		downloadApp() {
+			return ipcRenderer.invoke('ro:updates:downloadApp');
+		},
+		installApp() {
+			return ipcRenderer.invoke('ro:updates:installApp');
+		},
+		checkAssetPatch() {
+			return ipcRenderer.invoke('ro:updates:checkAssetPatch');
+		},
+		applyAssetPatch() {
+			return ipcRenderer.invoke('ro:updates:applyAssetPatch');
+		},
+		cancelAssetPatch() {
+			return ipcRenderer.invoke('ro:updates:cancelAssetPatch');
+		},
+		onPatchProgress(callback) {
+			if (typeof callback !== 'function') {
+				throw new TypeError('updates.onPatchProgress requires a function callback');
+			}
+			const handler = (_event, payload) => {
+				callback(payload);
+			};
+			ipcRenderer.on(PATCH_PROGRESS_CHANNEL, handler);
+			return () => {
+				ipcRenderer.removeListener(PATCH_PROGRESS_CHANNEL, handler);
+			};
+		},
+		onAppStatus(callback) {
+			if (typeof callback !== 'function') {
+				throw new TypeError('updates.onAppStatus requires a function callback');
+			}
+			const handler = (_event, payload) => {
+				callback(payload);
+			};
+			ipcRenderer.on(APP_UPDATE_STATUS_CHANNEL, handler);
+			return () => {
+				ipcRenderer.removeListener(APP_UPDATE_STATUS_CHANNEL, handler);
 			};
 		}
 	}

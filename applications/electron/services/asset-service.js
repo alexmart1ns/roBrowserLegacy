@@ -14,8 +14,9 @@ function resolveWorkerPath() {
 }
 
 export class AssetService {
-	constructor({ cacheDir = null, onProgress = null } = {}) {
+	constructor({ cacheDir = null, managedDir = null, onProgress = null } = {}) {
 		this._cacheDir = cacheDir;
+		this._managedDir = managedDir;
 		this._onProgress = onProgress;
 		this._worker = null;
 		this._nextId = 1;
@@ -29,7 +30,7 @@ export class AssetService {
 			return this._worker;
 		}
 		const worker = new Worker(resolveWorkerPath(), {
-			workerData: { cacheDir: this._cacheDir }
+			workerData: { cacheDir: this._cacheDir, managedDir: this._managedDir }
 		});
 		worker.on('message', msg => {
 			if (msg?.type === 'progress') {

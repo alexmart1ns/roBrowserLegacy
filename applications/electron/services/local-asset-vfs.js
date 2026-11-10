@@ -21,12 +21,14 @@ function isInsideRealRoot(rootRealPath, targetRealPath) {
 }
 
 export class LocalAssetVfs {
-	constructor({ cacheDir = null, onProgress = null } = {}) {
+	constructor({ cacheDir = null, managedDir = null, onProgress = null } = {}) {
 		this._cacheDir = cacheDir;
+		this._managedDir = managedDir;
 		this._onProgress = onProgress;
 		this._rootDir = null;
 		this._rootRealPath = null;
 		this._looseFiles = new Map(); // normalizedKey -> { realPath, displayName, size }
+		this._managedFiles = new Map(); // normalizedKey -> { realPath, displayName, size }
 		this._grfMounts = []; // ordered by priority (0 = highest)
 		this._conflicts = [];
 		this._missingGrfs = [];
@@ -58,6 +60,7 @@ export class LocalAssetVfs {
 		}
 		this._grfMounts = [];
 		this._looseFiles.clear();
+		this._managedFiles.clear();
 		this._conflicts = [];
 		this._missingGrfs = [];
 		this._rootDir = null;
@@ -68,6 +71,7 @@ export class LocalAssetVfs {
 			configured: false,
 			rootDir: null,
 			looseCount: 0,
+			managedCount: 0,
 			grfCount: 0,
 			totalGrfEntries: 0,
 			detectedPacketVer: null
@@ -78,7 +82,7 @@ export class LocalAssetVfs {
 		await clearAllCachedGrfIndices(this._cacheDir);
 	}
 
-	async initializeDirectory(rootDir, { grfList = null, forceReindex = false } = {}) {
+	async initializeDirectory(rootDir, { grfList = null, forceReindex = false, managedDir = null } = {}) {
 		const startMs = Date.now();
 		await this.close();
 
@@ -167,7 +171,54 @@ export class LocalAssetVfs {
 			}
 			const canonicalTop =
 				lowerTop === 'bgm' ? 'BGM' : lowerTop === 'system' ? 'System' : lowerTop === 'ai' ? 'AI' : 'data';
-			await this._scanLooseDir(path.join(rootRealPath, entry.name), canonicalTop);
+			await this._scanLooseDir(path.join(rootRealPath, entry.name), canonicalTop, this._looseFiles, rootRealPath);
+		}
+
+		// 3b. Index isolated managed patch files if configured
+		const activeManagedDir = managedDir || this._managedDir;
+		if (activeManagedDir && fs.existsSync(activeManagedDir)) {
+			try {
+				const managedReal = await fs.promises.realpath(activeManagedDir);
+				const managedTop = await fs.promises.readdir(managedReal, { withFileTypes: true });
+				for (const entry of managedTop) {
+					const lowerTop = entry.name.toLowerCase();
+					if (lowerTop.startsWith('.patch-')) {
+						continue;
+					}
+					if ((entry.isDirectory() || entry.isSymbolicLink()) && LOOSE_TOP_DIRS.has(lowerTop)) {
+						const canonicalTop =
+							lowerTop === 'bgm'
+								? 'BGM'
+								: lowerTop === 'system'
+									? 'System'
+									: lowerTop === 'ai'
+										? 'AI'
+										: 'data';
+						await this._scanLooseDir(
+							path.join(managedReal, entry.name),
+							canonicalTop,
+							this._managedFiles,
+							managedReal
+						);
+					} else if (entry.isFile() && lowerTop === 'clientinfo.xml') {
+						const realCi = await fs.promises.realpath(path.join(managedReal, entry.name));
+						if (isInsideRealRoot(managedReal, realCi)) {
+							const st = await fs.promises.stat(realCi);
+							const key = normalizeAssetKey('data/clientinfo.xml');
+							if (key && st.isFile()) {
+								this._managedFiles.set(key, {
+									realPath: realCi,
+									displayName: 'data\\clientinfo.xml',
+									size: st.size,
+									managedRoot: managedReal
+								});
+							}
+						}
+					}
+				}
+			} catch {
+				// Ignore inaccessible managed overlay directory
+			}
 		}
 
 		// 4. Determine GRF priority order:
@@ -288,6 +339,7 @@ export class LocalAssetVfs {
 			configured: true,
 			rootDir: rootRealPath,
 			looseCount: this._looseFiles.size,
+			managedCount: this._managedFiles.size,
 			grfCount: this._grfMounts.length,
 			totalGrfEntries,
 			indexCacheHits: cacheHits,
@@ -303,14 +355,14 @@ export class LocalAssetVfs {
 		return this.getStatus();
 	}
 
-	async _scanLooseDir(dirPath, relPrefix) {
+	async _scanLooseDir(dirPath, relPrefix, targetMap = this._looseFiles, boundaryRoot = this._rootRealPath) {
 		let realDir;
 		try {
 			realDir = await fs.promises.realpath(dirPath);
 		} catch {
 			return;
 		}
-		if (!isInsideRealRoot(this._rootRealPath, realDir)) {
+		if (!isInsideRealRoot(boundaryRoot, realDir)) {
 			return;
 		}
 
@@ -329,7 +381,7 @@ export class LocalAssetVfs {
 			} catch {
 				continue;
 			}
-			if (!isInsideRealRoot(this._rootRealPath, realChild)) {
+			if (!isInsideRealRoot(boundaryRoot, realChild)) {
 				continue;
 			}
 
@@ -342,14 +394,15 @@ export class LocalAssetVfs {
 
 			const childRel = `${relPrefix}/${entry.name}`;
 			if (st.isDirectory()) {
-				await this._scanLooseDir(realChild, childRel);
+				await this._scanLooseDir(realChild, childRel, targetMap, boundaryRoot);
 			} else if (st.isFile() && st.size <= MAX_LOOSE_FILE_BYTES) {
 				const key = normalizeAssetKey(childRel);
 				if (key) {
-					this._looseFiles.set(key, {
+					targetMap.set(key, {
 						realPath: realChild,
 						displayName: childRel.replace(/\//g, '\\'),
-						size: st.size
+						size: st.size,
+						managedRoot: boundaryRoot
 					});
 				}
 			}
@@ -367,7 +420,7 @@ export class LocalAssetVfs {
 		if (!key) {
 			return false;
 		}
-		if (this._looseFiles.has(key)) {
+		if (this._looseFiles.has(key) || this._managedFiles.has(key)) {
 			return true;
 		}
 		for (const mount of this._grfMounts) {
@@ -387,7 +440,7 @@ export class LocalAssetVfs {
 			return { found: false, reason: 'INVALID_PATH' };
 		}
 
-		// Priority 1: Loose local file
+		// Priority 0: User's local loose files
 		const loose = this._looseFiles.get(key);
 		if (loose) {
 			if (!isInsideRealRoot(this._rootRealPath, loose.realPath)) {
@@ -397,6 +450,18 @@ export class LocalAssetVfs {
 			const bytes = new Uint8Array(buf.byteLength);
 			bytes.set(buf);
 			return { found: true, source: 'loose', bytes, size: bytes.byteLength };
+		}
+
+		// Priority 1: Isolated managed patch files
+		const managed = this._managedFiles.get(key);
+		if (managed) {
+			if (!managed.managedRoot || !isInsideRealRoot(managed.managedRoot, managed.realPath)) {
+				return { found: false, reason: 'FORBIDDEN_PATH' };
+			}
+			const buf = await fs.promises.readFile(managed.realPath);
+			const bytes = new Uint8Array(buf.byteLength);
+			bytes.set(buf);
+			return { found: true, source: 'managed', bytes, size: bytes.byteLength };
 		}
 
 		// Priority 2: GRFs in DATA.INI / priority order
@@ -430,6 +495,10 @@ export class LocalAssetVfs {
 		if (loose) {
 			return { found: true, source: 'loose', realPath: loose.realPath, size: loose.size };
 		}
+		const managed = this._managedFiles.get(key);
+		if (managed) {
+			return { found: true, source: 'managed', realPath: managed.realPath, size: managed.size };
+		}
 		for (const mount of this._grfMounts) {
 			const rec = mount.entryMap.get(key);
 			if (rec) {
@@ -462,6 +531,13 @@ export class LocalAssetVfs {
 			}
 		}
 
+		for (const managed of this._managedFiles.values()) {
+			if (regex.test(managed.displayName) && !seen.has(managed.displayName)) {
+				seen.add(managed.displayName);
+				out.push(managed.displayName);
+			}
+		}
+
 		for (const mount of this._grfMounts) {
 			for (const rec of mount.entries) {
 				const displayName = rec[1];
@@ -484,11 +560,19 @@ export class LocalAssetVfs {
 				priority: 0,
 				count: this._looseFiles.size
 			});
+			if (this._managedFiles.size > 0) {
+				list.push({
+					type: 'managed',
+					name: 'Managed patch overlay',
+					priority: 1,
+					count: this._managedFiles.size
+				});
+			}
 			for (const mount of this._grfMounts) {
 				list.push({
 					type: 'grf',
 					name: mount.name,
-					priority: mount.priority + 1,
+					priority: mount.priority + 2,
 					prioritySource: mount.prioritySource,
 					entryCount: mount.entries.length,
 					size: mount.size,

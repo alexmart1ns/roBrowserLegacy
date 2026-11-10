@@ -2,12 +2,26 @@
 
 ## Current Status
 
-- **Current Phase / Gate:** `G5` & `G6` completed -> Moving to `G7` (Launcher Asset Patcher & Safe Updater)
+- **Current Phase / Gate:** `G7` completed -> Moving to `G8` (Production Packaging, NSIS Installer & CI)
 - **Branch:** `feat/electron-desktop-port`
 - **Base Commit:** `337870b6eea50ec0f528f02116c36082f608967a`
 - **Environment:** Windows 11 x64 (`10.0.26300.0`), Node `v24.15.0`, npm `11.12.1`, Electron `41.10.7`, Vite `8.3.7`, Vitest `4.1.12`, electron-builder `26.18.0`
 
 ## Completed Gates
+
+### `G7` — Launcher Asset Patcher & Safe App Updater (`PASS`)
+- **Completed:**
+  - Implemented signed asset patcher `ManifestPatcher` (`applications/electron/services/manifest-patcher.js`) using canonical payload verification via Ed25519 (`node:crypto`), monotonic `generation` anti-rollback state (`patch-state.json`), path-confinement & symlink protection, same-origin/SSRF HTTP validation, bounded concurrent downloads with `AbortController` cancellation, byte-cap & SHA-256 verification, atomic staging/swap with backup rollback on partial failure, and handle coordination (`beforeApply`/`afterApply`).
+  - Integrated isolated managed overlay (`userData/managed-assets/`) into `LocalAssetVfs` (`local-asset-vfs.js`, `asset-worker.mjs`, `asset-service.js`) at Priority 1 (above base GRFs, below optional user loose overrides) so user GRFs and client folders are never modified or corrupted by updates.
+  - Implemented verified app updater `AppUpdaterService` (`applications/electron/services/app-updater.js`) supporting `stable`/`beta` channels, semver comparison, Ed25519 feed verification, SHA-256 installer verification, staged downloads, and automatic gameplay protection (`setGameplayActive(true)` defers installation cleanly until exit/restart).
+  - Wired `updates.*` IPC (`getStatus`, `setGameplayActive`, `checkApp`, `downloadApp`, `installApp`, `checkAssetPatch`, `applyAssetPatch`, `cancelAssetPatch`, progress/status events) across `ipc-handlers.js`, `preload.cjs`, `entry.js`, and `launcher.js`.
+  - Verified with `tests/desktop/patcher-and-updater.test.js` (6 tests against local HTTP test server: signed manifest apply + VFS overlay precedence + base GRF untouched, bad signature, path traversal, hash mismatch, incomplete download, missing 404 file, downgrade rejection, mid-batch atomic rollback, non-writable dir collision, semver compare, app feed verify + gameplay deferral), ESLint (0 errors on `applications/electron/`), and `npm test` (42 files / 244 tests PASS).
+- **Files Added/Modified:**
+  - `applications/electron/services/manifest-patcher.js`, `app-updater.js`
+  - `applications/electron/services/local-asset-vfs.js`, `asset-worker.mjs`, `asset-service.js`
+  - `applications/electron/main/ipc-handlers.js`, `applications/electron/preload/preload.cjs`
+  - `applications/electron/renderer/config.js`, `entry.js`, `launcher.js`
+  - `tests/desktop/patcher-and-updater.test.js`
 
 ### `G5` & `G6` — Configuration, First-Use Launcher UX, OS Integration & Stability (`PASS`)
 - **Completed:**

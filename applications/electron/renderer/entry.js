@@ -16,6 +16,12 @@ function getDesiredHttpOrigins(settings) {
 			}
 		}
 	}
+	if (settings?.updates?.appFeedUrl) {
+		candidates.push(settings.updates.appFeedUrl);
+	}
+	if (settings?.updates?.assetManifestUrl) {
+		candidates.push(settings.updates.assetManifestUrl);
+	}
 	for (const raw of candidates) {
 		try {
 			const parsed = new URL(raw);
@@ -65,6 +71,7 @@ async function startDesktopRenderer() {
 
 		syncRendererPreferencesToLocalStorage(latestSettings);
 		await api.network.registerServers(latestSettings.servers || []);
+		await api.updates.setGameplayActive(true).catch(() => {});
 
 		if (latestSettings.preferences?.fullscreen) {
 			await api.windowControls.setFullscreen(true).catch(() => {});

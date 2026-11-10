@@ -3,6 +3,7 @@ import { LocalAssetVfs } from './local-asset-vfs.js';
 
 const vfs = new LocalAssetVfs({
 	cacheDir: workerData?.cacheDir || null,
+	managedDir: workerData?.managedDir || null,
 	onProgress: progress => {
 		parentPort.postMessage({ type: 'progress', progress });
 	}

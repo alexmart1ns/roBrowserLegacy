@@ -437,6 +437,98 @@ export function mountDesktopLauncher({ platformInfo, initialSettings, initialAss
 		q('dl-diag-debug').checked = Boolean(settings.debugLogging);
 	};
 
+	const renderUpdatesControls = () => {
+		const slot = q('dl-updates-slot');
+		if (!slot || slot.childElementCount > 0) {
+			return;
+		}
+		slot.innerHTML = `
+			<div class="dl-alert dl-alert-info" id="dl-upd-status-box">Patch &amp; app update status: Ready</div>
+			<div class="dl-row">
+				<button class="dl-btn" id="dl-upd-patch-apply" type="button">Check &amp; Apply Asset Patches</button>
+				<button class="dl-btn dl-btn-danger" id="dl-upd-patch-cancel" type="button">Cancel Patch</button>
+			</div>
+			<div class="dl-row">
+				<button class="dl-btn" id="dl-upd-app-check" type="button">Check App Update</button>
+				<button class="dl-btn" id="dl-upd-app-download" type="button" disabled>Download App Update</button>
+				<button class="dl-btn" id="dl-upd-app-install" type="button" disabled>Restart &amp; Install</button>
+			</div>
+		`;
+
+		const statusBox = q('dl-upd-status-box');
+		const refreshStatus = async () => {
+			if (!window.electronAPI?.updates?.getStatus) {
+				return;
+			}
+			const st = await window.electronAPI.updates.getStatus();
+			const gen = st?.patch?.generation || 0;
+			const appVer = st?.app?.downloadedVersion || st?.app?.availableVersion || null;
+			statusBox.textContent = `Patch generation: #${gen} | Managed files: ${st?.patch?.fileCount || 0} | App: v${st?.app?.currentVersion || '0.0.0'}${appVer ? ` -> v${appVer}` : ''}`;
+			q('dl-upd-app-download').disabled = !st?.app?.availableVersion;
+			q('dl-upd-app-install').disabled = !st?.app?.downloadedInstallerPath;
+		};
+
+		q('dl-upd-patch-apply').addEventListener('click', async () => {
+			setStatusMessage('Checking & applying signed asset patches...');
+			q('dl-upd-save').click();
+			const res = await window.electronAPI.updates.applyAssetPatch();
+			if (!res?.ok) {
+				statusBox.textContent = `Patch error: ${res?.code || 'FAILED'}`;
+				setStatusMessage(`Asset patch failed (${res?.code || 'FAILED'}).`, true);
+				return;
+			}
+			if (res.assetsStatus) {
+				assetsStatus = res.assetsStatus;
+			}
+			renderAll();
+			await refreshStatus();
+			statusBox.textContent = res.upToDate
+				? `Assets up to date at generation #${res.generation}.`
+				: `Patched generation #${res.generation} (${res.downloadedCount} file(s) updated).`;
+			setStatusMessage('Asset patch operation complete.');
+		});
+
+		q('dl-upd-patch-cancel').addEventListener('click', async () => {
+			await window.electronAPI.updates.cancelAssetPatch();
+			setStatusMessage('Asset patch canceled.');
+		});
+
+		q('dl-upd-app-check').addEventListener('click', async () => {
+			q('dl-upd-save').click();
+			const res = await window.electronAPI.updates.checkApp();
+			if (!res?.ok) {
+				statusBox.textContent = `Update check error: ${res?.code || 'FAILED'}`;
+				setStatusMessage(`App update check failed (${res?.code || 'FAILED'}).`, true);
+				return;
+			}
+			if (!res.updateAvailable) {
+				statusBox.textContent = `App is up to date (v${res.currentVersion}).`;
+			} else {
+				statusBox.textContent = `App update available: v${res.update.version}`;
+				q('dl-upd-app-download').disabled = false;
+			}
+		});
+
+		q('dl-upd-app-download').addEventListener('click', async () => {
+			const res = await window.electronAPI.updates.downloadApp();
+			if (!res?.ok) {
+				statusBox.textContent = `Download error: ${res?.code || 'FAILED'}`;
+				return;
+			}
+			statusBox.textContent = `Verified installer v${res.version} ready to install.`;
+			q('dl-upd-app-install').disabled = false;
+		});
+
+		q('dl-upd-app-install').addEventListener('click', async () => {
+			const res = await window.electronAPI.updates.installApp();
+			if (!res?.ok) {
+				statusBox.textContent = `Install blocked/failed: ${res?.code || 'FAILED'}`;
+			}
+		});
+
+		refreshStatus().catch(() => {});
+	};
+
 	const renderAll = () => {
 		renderHeaderBadges();
 		renderAssetsSection();
@@ -696,6 +788,7 @@ export function mountDesktopLauncher({ platformInfo, initialSettings, initialAss
 		}
 	});
 
+	renderUpdatesControls();
 	renderAll();
 
 	return {
