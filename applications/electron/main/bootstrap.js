@@ -1,19 +1,29 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { getAppEntryUrl, registerAppProtocol, registerPrivilegedSchemes, resolveRendererRoot } from './protocol.js';
+import { applySessionSecurity, applyWindowSecurity } from './window-security.js';
+import { createDesktopServices } from './ipc-handlers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const electronDir = path.resolve(__dirname, '..');
 
 const isDev = !app.isPackaged && process.argv.includes('--dev');
 const devUrl = process.env.ELECTRON_RENDERER_URL || 'http://localhost:3000/applications/electron/renderer/index.html';
+const devOrigin = (() => {
+	try {
+		return new URL(devUrl).origin;
+	} catch {
+		return 'http://localhost:3000';
+	}
+})();
 
 registerPrivilegedSchemes();
 
 let mainWindow = null;
+let desktopServices = null;
 
 function createWindow() {
 	mainWindow = new BrowserWindow({
@@ -25,11 +35,23 @@ function createWindow() {
 		frame: true,
 		icon: path.join(electronDir, 'icon.png'),
 		webPreferences: {
-			preload: path.join(electronDir, 'preload.mjs'),
+			preload: path.join(electronDir, 'preload', 'preload.cjs'),
 			contextIsolation: true,
 			nodeIntegration: false,
-			nodeIntegrationInWorker: true,
-			sandbox: false
+			nodeIntegrationInWorker: false,
+			sandbox: true,
+			webSecurity: true,
+			allowRunningInsecureContent: false
+		}
+	});
+
+	applyWindowSecurity(mainWindow, {
+		isDev,
+		devOrigin,
+		onCleanup(webContentsId) {
+			if (desktopServices) {
+				desktopServices.cleanupOwner(webContentsId);
+			}
 		}
 	});
 
@@ -50,6 +72,9 @@ function createWindow() {
 
 export async function startApp() {
 	await app.whenReady();
+
+	applySessionSecurity(session.defaultSession);
+	desktopServices = createDesktopServices({ isDev, devOrigin });
 
 	if (!isDev) {
 		const rendererRoot = resolveRendererRoot(electronDir);

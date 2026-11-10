@@ -76,27 +76,33 @@ class CharEngine {
 		const forceAddress = Configs.get('forceUseAddress');
 		const server_info = Configs.getServer();
 		const ip = forceAddress ? server_info.address : Network.utils.longToIP(server.ip);
-		Network.connect(ip, server.port, success => {
-			// Fail to connect...
-			if (!success) {
-				UIManager.showErrorBox(DB.getMessage(1));
-				return;
-			}
+		Network.connect(
+			ip,
+			server.port,
+			success => {
+				// Fail to connect...
+				if (!success) {
+					UIManager.showErrorBox(DB.getMessage(1));
+					return;
+				}
 
-			// Success, try to connect
-			const pkt = new PACKET.CH.ENTER();
-			pkt.AID = Session.AID;
-			pkt.AuthCode = Session.AuthCode;
-			pkt.userLevel = Session.UserLevel;
-			pkt.Sex = Session.Sex;
-			pkt.clientType = Session.LangType;
-			Network.sendPacket(pkt);
+				// Success, try to connect
+				const pkt = new PACKET.CH.ENTER();
+				pkt.AID = Session.AID;
+				pkt.AuthCode = Session.AuthCode;
+				pkt.userLevel = Session.UserLevel;
+				pkt.Sex = Session.Sex;
+				pkt.clientType = Session.LangType;
+				Network.sendPacket(pkt);
 
-			// Server send back (new) AID
-			Network.read(fp => {
-				Session.AID = fp.readLong();
-			});
-		});
+				// Server send back (new) AID
+				Network.read(fp => {
+					Session.AID = fp.readLong();
+				});
+			},
+			false,
+			'char'
+		);
 
 		//Select UI version
 		CharSelect.selectUIVersion();

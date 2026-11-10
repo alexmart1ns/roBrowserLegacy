@@ -40,11 +40,11 @@ let _socketFactory = null;
  * @param {number} port
  * @return {Socket}
  */
-function defaultSocketFactory(host, port) {
+function defaultSocketFactory(host, port, role = 'login') {
 	const proxy = Configs.get('socketProxy', null);
 
 	if (NodeSocket.isSupported()) {
-		return new NodeSocket(host, port, proxy);
+		return new NodeSocket(host, port, proxy, role);
 	}
 	return new WebSocket(host, port, proxy);
 }
@@ -101,8 +101,11 @@ Packets.list = [];
  * @param {function} callback once connected or not
  * @param {boolean} is zone server ?
  */
-function connect(host, port, callback, isZone) {
-	const socket = _socketFactory ? _socketFactory(host, port) : defaultSocketFactory(host, port);
+function connect(host, port, callback, isZone, role) {
+	const socketRole = role || (isZone ? 'map' : 'login');
+	const socket = _socketFactory
+		? _socketFactory(host, port, socketRole)
+		: defaultSocketFactory(host, port, socketRole);
 
 	socket.isZone = !!isZone;
 	socket.onClose = onClose;
@@ -119,6 +122,7 @@ function connect(host, port, callback, isZone) {
 				clearInterval(_socket.ping);
 			}
 
+			_save_buffer = null;
 			socket.onMessage = receive;
 			_sockets.push((_socket = socket));
 
@@ -382,6 +386,9 @@ function onClose() {
  */
 function close() {
 	let idx;
+
+	_save_buffer = null;
+	read.callback = null;
 
 	if (_socket) {
 		const s = _socket;

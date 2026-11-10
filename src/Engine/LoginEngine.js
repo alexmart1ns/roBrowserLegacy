@@ -237,6 +237,11 @@ function onConnectionRequest(username, password) {
 	WinLoading.append();
 	_loginID = username;
 
+	// Register selected login server with Desktop network policy before opening socket
+	if (typeof window !== 'undefined' && window.electronAPI?.network?.registerServers && _server) {
+		window.electronAPI.network.registerServers([_server]).catch(() => {});
+	}
+
 	// Try to connect
 	Network.connect(_server.address, _server.port, success => {
 		// Fail to connect...

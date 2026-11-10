@@ -122,6 +122,19 @@ export default [
   },
 
   {
+    files: ['applications/electron/**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+        ...globals.es2025
+      }
+    },
+    rules: sharedRules
+  },
+
+  {
     files: ['applications/electron/renderer/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,

@@ -2,12 +2,37 @@
 
 ## Current Status
 
-- **Current Phase / Gate:** `G1` completed -> Moving to `G2` (Electron Bridge & Security)
+- **Current Phase / Gate:** `G3` completed -> Moving to `G4` (Local Assets, GRF, VFS & Workers)
 - **Branch:** `feat/electron-desktop-port`
 - **Base Commit:** `337870b6eea50ec0f528f02116c36082f608967a`
 - **Environment:** Windows 11 x64 (`10.0.26300.0`), Node `v24.15.0`, npm `11.12.1`, Electron `41.10.7`, Vite `8.3.7`, Vitest `4.1.12`, electron-builder `26.18.0`
 
 ## Completed Gates
+
+### `G3` — Native TCP with Packet Parity (`PASS`)
+- **Completed:**
+  - Implemented main-process TCP service (`applications/electron/services/tcp-service.js`) using `node:net`, `socket.setNoDelay(true)`, connect timeout (`10_000ms`), per-window socket limits (`8`), outbound backpressure cap (`4 MiB`), strict socket state machine (no duplicate `connected`/`closed`, no `closed` on pre-connect failure, no use-after-close), and zero-offset `Uint8Array` emission.
+  - Implemented destination authorization policy (`applications/electron/services/network-policy.js`) requiring explicitly configured servers for `login`, binding `char`/`map` redirects to active authorized sessions, and blocking metadata/unspecified/multicast IPs (`169.254.0.0/16`, `fe80::/10`, `0.0.0.0/8`, `224.0.0.0/4`), DNS rebinding to blocked IPs, and dangerous non-RO service ports on redirects.
+  - Updated `src/Network/SocketHelpers/NodeSocket.js` to consume `window.electronAPI.network` over validated IPC (removing `node:net` from preload), preserving exact `NetworkManager` contract.
+  - Updated `src/Network/NetworkManager.js` (passes socket role `login|char|map`, clears `_save_buffer` & `read.callback` on close/new connect, preserves custom `_socketFactory` & `WebSocket` path) and `src/Engine/LoginEngine.js` / `src/Engine/CharEngine.js` (registers server and passes connection role).
+  - Verified with `tests/desktop/network-policy.test.js` (3 tests), `tests/desktop/tcp-service.test.js` (3 tests: fragmented & concatenated binary TCP loopback, refused port, DNS rebind blocking, timeout, teardown), `tests/desktop/node-socket-network.test.js` (2 tests: RO packet fragmentation/coalescing across Login->Char transition + WebSocket fallback), and live packaged Electron CDP loopback TCP probe (`received:[129,0,42,254,16,153]`).
+- **Files Added/Modified:**
+  - `applications/electron/services/network-policy.js`, `applications/electron/services/tcp-service.js`
+  - `src/Network/SocketHelpers/NodeSocket.js`, `src/Network/NetworkManager.js`, `src/Engine/LoginEngine.js`, `src/Engine/CharEngine.js`
+  - `tests/desktop/network-policy.test.js`, `tests/desktop/tcp-service.test.js`, `tests/desktop/node-socket-network.test.js`
+
+### `G2` — Electron Bridge & Security (`PASS`)
+- **Completed:**
+  - Enabled `contextIsolation: true`, `nodeIntegration: false`, `nodeIntegrationInWorker: false`, `sandbox: true`, `webSecurity: true`, `allowRunningInsecureContent: false` in `applications/electron/main/bootstrap.js`.
+  - Replaced `applications/electron/preload.mjs` (`node:net` access) with sandbox-compatible `applications/electron/preload/preload.cjs` exposing only `isElectron`, `platform.{getInfo,openExternal}`, and `network.{registerServers,open,send,close,onEvent}`.
+  - Implemented `applications/electron/main/ipc-security.js` (`senderFrame === mainFrame`, origin checks, payload/URL/port/socketId/binary validation) and `applications/electron/main/ipc-handlers.js`.
+  - Implemented `applications/electron/main/window-security.js` locking `will-navigate`, `setWindowOpenHandler` (validated `http:`/`https:` via `shell.openExternal`), session permissions (`false`), `will-download` prevention, and socket cleanup on navigation/crash/destroy.
+  - Verified with `tests/desktop/ipc-security.test.js` (5 tests) and live packaged Electron CDP sandbox probe (`hasRequire: false`, `hasProcess: false`, blocked metadata IP/unconfigured server/file URI, zero console errors).
+- **Files Added/Modified/Removed:**
+  - `applications/electron/preload/preload.cjs` (added), `applications/electron/preload.mjs` (removed)
+  - `applications/electron/main/ipc-security.js`, `applications/electron/main/ipc-handlers.js`, `applications/electron/main/window-security.js`, `applications/electron/main/bootstrap.js`
+  - `applications/electron/electron-builder.yml`, `eslint.config.js`
+  - `tests/desktop/ipc-security.test.js`
 
 ### `G1` — Build & Renderer of Electron (`PASS`)
 - **Completed:**

@@ -9,7 +9,8 @@ directories:
 files:
     - applications/electron/main.js
     - applications/electron/main/**/*
-    - applications/electron/preload.mjs
+    - applications/electron/preload/**/*
+    - applications/electron/services/**/*
     - applications/electron/icon.png
     - from: dist/DesktopRenderer
       to: renderer
